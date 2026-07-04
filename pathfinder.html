@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PATHFINDER — Graph Traversal Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0D12;
+    --panel: #10141C;
+    --panel-2: #161B26;
+    --border: #232937;
+    --text: #E6EAF2;
+    --text-dim: #7C879C;
+    --cyan: #45E6D6;
+    --cyan-dim: rgba(69,230,214,0.18);
+    --amber: #F5A742;
+    --amber-dim: rgba(245,167,66,0.18);
+    --wall: #1B2029;
+    --wall-border: #2B3242;
+    --weight: #3A2E1A;
+    --weight-border: #6B5327;
+    --danger: #E85D6B;
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(69,230,214,0.05), transparent 40%),
+      radial-gradient(circle at 85% 92%, rgba(245,167,66,0.04), transparent 40%);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    min-height:100vh;
+    padding: 28px 20px 60px;
+  }
+  .wrap{ max-width: 1040px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  header{ margin-bottom: 26px; }
+  .eyebrow{
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom: 10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px; height:7px;
+    background: var(--cyan);
+    border-radius:50%;
+    box-shadow: 0 0 8px var(--cyan);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  h1{
+    font-size: clamp(28px, 5vw, 42px);
+    margin: 0 0 6px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h1 span{ color: var(--text-dim); font-weight:400; }
+  .sub{ color: var(--text-dim); font-size: 13px; max-width: 560px; line-height:1.6; }
+
+  /* ---------- Control deck ---------- */
+  .deck{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    display:flex;
+    flex-wrap:wrap;
+    gap: 20px 28px;
+    align-items:flex-end;
+  }
+  .field{ display:flex; flex-direction:column; gap:8px; }
+  .field label{
+    font-size:10px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color: var(--text-dim);
+  }
+  .btn-group{ display:flex; gap:6px; flex-wrap:wrap; }
+  .btn{
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    cursor:pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    letter-spacing:0.02em;
+  }
+  .btn:hover{ border-color: var(--cyan); color: var(--cyan); }
+  .btn:focus-visible{ outline: 2px solid var(--cyan); outline-offset:2px; }
+  .btn.active{ background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+  .btn.active.tool-weight{ background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .btn.primary{ background: var(--cyan); color: #04211E; border-color: var(--cyan); font-weight:600; }
+  .btn.primary:hover{ color:#04211E; filter: brightness(1.08); }
+  .btn.primary:disabled{ opacity:0.4; cursor:not-allowed; filter:none; }
+  .btn.ghost{ color: var(--text-dim); }
+  .btn.ghost:hover{ border-color: var(--danger); color: var(--danger); }
+
+  input[type=range]{
+    width: 130px;
+    accent-color: var(--cyan);
+    background:transparent;
+  }
+  .speed-row{ display:flex; align-items:center; gap:10px; font-size:11px; color:var(--text-dim); }
+
+  /* ---------- Stats ---------- */
+  .stats{
+    display:flex; gap: 22px; flex-wrap:wrap;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  .stat{ display:flex; flex-direction:column; gap:3px; }
+  .stat .k{ color: var(--text-dim); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; }
+  .stat .v{ color: var(--text); font-size:16px; font-weight:600; }
+  .stat .v.status-running{ color: var(--amber); }
+  .stat .v.status-found{ color: var(--cyan); }
+  .stat .v.status-none{ color: var(--danger); }
+
+  /* ---------- Grid ---------- */
+  .board{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+  }
+  .grid{
+    display:grid;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    user-select:none;
+    touch-action:none;
+  }
+  .cell{
+    background: #0D1017;
+    aspect-ratio: 1 / 1;
+    position:relative;
+    cursor: crosshair;
+  }
+  .cell.wall{ background: var(--wall); box-shadow: inset 0 0 0 1px var(--wall-border); }
+  .cell.weight{ background: var(--weight); box-shadow: inset 0 0 0 1px var(--weight-border); }
+  .cell.weight::after{
+    content:"";
+    position:absolute; inset: 30%;
+    background: var(--amber);
+    opacity:0.55;
+    border-radius:1px;
+  }
+  .cell.start{ background: var(--cyan); box-shadow: 0 0 10px var(--cyan); z-index:2; }
+  .cell.end{ background: var(--amber); box-shadow: 0 0 10px var(--amber); z-index:2; }
+  .cell.visited{
+    animation: visitPulse 480ms ease-out forwards;
+  }
+  .cell.path{
+    animation: pathPulse 380ms ease-out forwards;
+  }
+  @keyframes visitPulse{
+    0%{ background: rgba(69,230,214,0.85); transform: scale(0.75); border-radius:50%; }
+    60%{ background: var(--cyan-dim); }
+    100%{ background: rgba(69,230,214,0.13); transform: scale(1); border-radius:0; }
+  }
+  @keyframes pathPulse{
+    0%{ background: rgba(245,167,66,0.4); transform: scale(0.6); }
+    100%{ background: var(--amber); transform: scale(1); box-shadow: 0 0 6px rgba(245,167,66,0.6); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .cell.visited, .cell.path{ animation: none !important; }
+    .cell.visited{ background: rgba(69,230,214,0.16); }
+    .cell.path{ background: var(--amber); }
+    .eyebrow::before{ animation:none; }
+  }
+
+  /* ---------- Legend ---------- */
+  .legend{
+    display:flex; gap:18px; flex-wrap:wrap;
+    margin-top:16px;
+    font-size:11px; color: var(--text-dim);
+  }
+  .legend .item{ display:flex; align-items:center; gap:7px; }
+  .swatch{ width:11px; height:11px; border-radius:2px; display:inline-block; }
+
+  footer{
+    margin-top: 26px;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height:1.7;
+  }
+  footer b{ color: var(--text); font-weight:600; }
+
+  @media (max-width: 640px){
+    .deck{ gap: 14px 18px; padding: 14px; }
+    .field{ flex: 1 1 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Graph Traversal Engine</div>
+    <h1>PATHFINDER <span>/ grid visualizer</span></h1>
+    <p class="sub">Draw walls, drop weighted terrain, place your start and end nodes — then watch BFS, DFS, Dijkstra, and A* fight their way across the same board.</p>
+  </header>
+
+  <div class="deck">
+    <div class="field">
+      <label>Algorithm</label>
+      <div class="btn-group" id="algoGroup">
+        <button class="btn active" data-algo="bfs">BFS</button>
+        <button class="btn" data-algo="dfs">DFS</button>
+        <button class="btn" data-algo="dijkstra">Dijkstra</button>
+        <button class="btn" data-algo="astar">A*</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tool</label>
+      <div class="btn-group" id="toolGroup">
+        <button class="btn active" data-tool="wall">Wall</button>
+        <button class="btn tool-weight" data-tool="weight">Terrain ×5</button>
+        <button class="btn" data-tool="start">Start</button>
+        <button class="btn" data-tool="end">End</button>
+        <button class="btn" data-tool="erase">Erase</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Speed</label>
+      <div class="speed-row">
+        <span>Slow</span>
+        <input type="range" id="speed" min="1" max="100" value="55">
+        <span>Fast</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-left:auto;">
+      <label>&nbsp;</label>
+      <div class="btn-group">
+        <button class="btn primary" id="visualizeBtn">▶ Visualize</button>
+        <button class="btn" id="scrambleBtn">Scramble Terrain</button>
+        <button class="btn ghost" id="clearPathBtn">Clear Path</button>
+        <button class="btn ghost" id="clearBoardBtn">Clear Board</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="k">Status</span><span class="v" id="statStatus">Idle</span></div>
+    <div class="stat"><span class="k">Nodes Visited</span><span class="v" id="statVisited">0</span></div>
+    <div class="stat"><span class="k">Path Length</span><span class="v" id="statPath">—</span></div>
+    <div class="stat"><span class="k">Path Cost</span><span class="v" id="statCost">—</span></div>
+  </div>
+
+  <div class="board">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="swatch" style="background:var(--cyan)"></span> Start</div>
+    <div class="item"><span class="swatch" style="background:var(--amber)"></span> End</div>
+    <div class="item"><span class="swatch" style="background:var(--wall)"></span> Wall (blocks path)</div>
+    <div class="item"><span class="swatch" style="background:var(--weight)"></span> Terrain (costs 5 to enter)</div>
+    <div class="item"><span class="swatch" style="background:rgba(69,230,214,0.4)"></span> Explored</div>
+    <div class="item"><span class="swatch" style="background:var(--amber)"></span> Final path</div>
+  </div>
+
+  <footer>
+    <b>How to read it:</b> BFS and DFS ignore terrain cost entirely — they only care about number of steps, so they'll happily cut through terrain cells. Dijkstra and A* treat terrain cells as 5× more expensive, so they route around them when a cheaper way exists. That difference is the whole point of running them side by side on the same board.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const ROWS = 18, COLS = 34;
+  const gridEl = document.getElementById('grid');
+  gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  let start = { r: 9, c: 5 };
+  let end   = { r: 9, c: COLS - 6 };
+
+  // state per cell
+  let cells = []; // cells[r][c] = { r,c,isWall,weight,el }
+  let currentTool = 'wall';
+  let currentAlgo = 'bfs';
+  let isPointerDown = false;
+  let isAnimating = false;
+  let dragErasing = false;
+
+  const statStatus = document.getElementById('statStatus');
+  const statVisited = document.getElementById('statVisited');
+  const statPath = document.getElementById('statPath');
+  const statCost = document.getElementById('statCost');
+  const visualizeBtn = document.getElementById('visualizeBtn');
+
+  function buildGrid(){
+    gridEl.innerHTML = '';
+    cells = [];
+    for(let r=0;r<ROWS;r++){
+      const row = [];
+      for(let c=0;c<COLS;c++){
+        const el = document.createElement('div');
+        el.className = 'cell';
+        el.dataset.r = r; el.dataset.c = c;
+        gridEl.appendChild(el);
+        row.push({ r, c, isWall:false, weight:1, el });
+      }
+      cells.push(row);
+    }
+    paintEndpoints();
+  }
+
+  function paintEndpoints(){
+    cells.forEach(row => row.forEach(cell => {
+      cell.el.classList.remove('start','end');
+    }));
+    cells[start.r][start.c].el.classList.add('start');
+    cells[end.r][end.c].el.classList.add('end');
+  }
+
+  function isEndpoint(r,c){
+    return (r===start.r && c===start.c) || (r===end.r && c===end.c);
+  }
+
+  function clearCellVisual(cell){
+    cell.el.className = 'cell';
+    if(cell.isWall) cell.el.classList.add('wall');
+    else if(cell.weight > 1) cell.el.classList.add('weight');
+    if(isEndpoint(cell.r,cell.c)){
+      cell.el.classList.add(cell.r===start.r && cell.c===start.c ? 'start' : 'end');
+    }
+  }
+
+  function applyTool(r,c,erasing){
+    const cell = cells[r][c];
+    if(isAnimating) return;
+
+    if(currentTool === 'start'){
+      if(isEndpoint(r,c)) return;
+      start = { r, c };
+      paintEndpoints();
+      return;
+    }
+    if(currentTool === 'end'){
+      if(isEndpoint(r,c)) return;
+      end = { r, c };
+      paintEndpoints();
+      return;
+    }
+    if(isEndpoint(r,c)) return;
+
+    if(currentTool === 'erase' || erasing){
+      cell.isWall = false; cell.weight = 1;
+    } else if(currentTool === 'wall'){
+      cell.isWall = true; cell.weight = 1;
+    } else if(currentTool === 'weight'){
+      cell.isWall = false; cell.weight = 5;
+    }
+    clearCellVisual(cell);
+  }
+
+  // ---------- pointer interaction ----------
+  gridEl.addEventListener('pointerdown', (e)=>{
+    const t = e.target.closest('.cell');
+    if(!t) return;
+    isPointerDown = true;
+    const r = +t.dataset.r, c = +t.dataset.c;
+    const already = cells[r][c].isWall || cells[r][c].weight > 1;
+    dragErasing = (currentTool === 'wall' || currentTool === 'weight') && already;
+    applyTool(r,c,false);
+  });
+  gridEl.addEventListener('pointerover', (e)=>{
+    if(!isPointerDown) return;
+    const t = e.target.closest('.cell');
+    if(!t) return;
+    const r = +t.dataset.r, c = +t.dataset.c;
+    applyTool(r,c,dragErasing);
+  });
+  window.addEventListener('pointerup', ()=>{ isPointerDown = false; });
+  gridEl.addEventListener('contextmenu', e=>e.preventDefault());
+
+  // ---------- tool / algo selection ----------
+  document.getElementById('toolGroup').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.btn');
+    if(!btn) return;
+    document.querySelectorAll('#toolGroup .btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+  });
+  document.getElementById('algoGroup').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.btn');
+    if(!btn) return;
+    document.querySelectorAll('#algoGroup .btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentAlgo = btn.dataset.algo;
+  });
+
+  // ---------- board actions ----------
+  document.getElementById('clearBoardBtn').addEventListener('click', ()=>{
+    if(isAnimating) return;
+    cells.forEach(row => row.forEach(cell=>{
+      cell.isWall = false; cell.weight = 1;
+    }));
+    buildGridVisualOnly();
+    resetStats();
+  });
+  document.getElementById('clearPathBtn').addEventListener('click', ()=>{
+    if(isAnimating) return;
+    cells.forEach(row => row.forEach(cell=> clearCellVisual(cell)));
+    resetStats();
+  });
+  document.getElementById('scrambleBtn').addEventListener('click', ()=>{
+    if(isAnimating) return;
+    cells.forEach(row => row.forEach(cell=>{
+      if(isEndpoint(cell.r,cell.c)) return;
+      const nearStart = Math.abs(cell.r-start.r)+Math.abs(cell.c-start.c) <= 1;
+      const nearEnd = Math.abs(cell.r-end.r)+Math.abs(cell.c-end.c) <= 1;
+      if(nearStart || nearEnd){ cell.isWall=false; cell.weight=1; return; }
+      const roll = Math.random();
+      if(roll < 0.26){ cell.isWall = true; cell.weight = 1; }
+      else if(roll < 0.42){ cell.isWall = false; cell.weight = 5; }
+      else { cell.isWall = false; cell.weight = 1; }
+      clearCellVisual(cell);
+    }));
+    resetStats();
+  });
+
+  function buildGridVisualOnly(){
+    cells.forEach(row => row.forEach(cell => clearCellVisual(cell)));
+    paintEndpoints();
+  }
+
+  function resetStats(){
+    statStatus.textContent = 'Idle';
+    statStatus.className = 'v';
+    statVisited.textContent = '0';
+    statPath.textContent = '—';
+    statCost.textContent = '—';
+  }
+
+  // ---------- neighbors ----------
+  function neighbors(cell){
+    const out = [];
+    const deltas = [[-1,0],[1,0],[0,-1],[0,1]];
+    for(const [dr,dc] of deltas){
+      const nr = cell.r+dr, nc = cell.c+dc;
+      if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS){
+        const n = cells[nr][nc];
+        if(!n.isWall) out.push(n);
+      }
+    }
+    return out;
+  }
+
+  // ---------- algorithms ----------
+  // Each returns { visitedOrder: [cell,...], path: [cell,...]|null, cost:number }
+
+  function bfs(){
+    const startCell = cells[start.r][start.c];
+    const endCell = cells[end.r][end.c];
+    const visited = new Set();
+    const prev = new Map();
+    const visitedOrder = [];
+    const queue = [startCell];
+    visited.add(startCell);
+    let found = false;
+    while(queue.length){
+      const node = queue.shift();
+      visitedOrder.push(node);
+      if(node === endCell){ found = true; break; }
+      for(const n of neighbors(node)){
+        if(!visited.has(n)){
+          visited.add(n);
+          prev.set(n, node);
+          queue.push(n);
+        }
+      }
+    }
+    return finish(found, endCell, prev, visitedOrder, true);
+  }
+
+  function dfs(){
+    const startCell = cells[start.r][start.c];
+    const endCell = cells[end.r][end.c];
+    const visited = new Set();
+    const prev = new Map();
+    const visitedOrder = [];
+    const stack = [startCell];
+    let found = false;
+    while(stack.length){
+      const node = stack.pop();
+      if(visited.has(node)) continue;
+      visited.add(node);
+      visitedOrder.push(node);
+      if(node === endCell){ found = true; break; }
+      for(const n of neighbors(node)){
+        if(!visited.has(n)){
+          if(!prev.has(n)) prev.set(n, node);
+          stack.push(n);
+        }
+      }
+    }
+    return finish(found, endCell, prev, visitedOrder, true);
+  }
+
+  function dijkstra(){
+    const startCell = cells[start.r][start.c];
+    const endCell = cells[end.r][end.c];
+    const dist = new Map();
+    const prev = new Map();
+    const visited = new Set();
+    const visitedOrder = [];
+    cells.forEach(row=>row.forEach(c=>dist.set(c, Infinity)));
+    dist.set(startCell, 0);
+    const unvisited = [];
+    cells.forEach(row=>row.forEach(c=>{ if(!c.isWall) unvisited.push(c); }));
+    let found = false;
+    while(unvisited.length){
+      unvisited.sort((a,b)=>dist.get(a)-dist.get(b));
+      const node = unvisited.shift();
+      if(dist.get(node) === Infinity) break;
+      visited.add(node);
+      visitedOrder.push(node);
+      if(node === endCell){ found = true; break; }
+      for(const n of neighbors(node)){
+        if(visited.has(n)) continue;
+        const alt = dist.get(node) + n.weight;
+        if(alt < dist.get(n)){
+          dist.set(n, alt);
+          prev.set(n, node);
+        }
+      }
+    }
+    return finish(found, endCell, prev, visitedOrder, false, dist);
+  }
+
+  function astar(){
+    const startCell = cells[start.r][start.c];
+    const endCell = cells[end.r][end.c];
+    const h = (c)=> Math.abs(c.r-endCell.r) + Math.abs(c.c-endCell.c);
+    const gScore = new Map();
+    const prev = new Map();
+    const visited = new Set();
+    const visitedOrder = [];
+    cells.forEach(row=>row.forEach(c=>gScore.set(c, Infinity)));
+    gScore.set(startCell, 0);
+    const open = [startCell];
+    let found = false;
+    while(open.length){
+      open.sort((a,b)=> (gScore.get(a)+h(a)) - (gScore.get(b)+h(b)));
+      const node = open.shift();
+      if(visited.has(node)) continue;
+      visited.add(node);
+      visitedOrder.push(node);
+      if(node === endCell){ found = true; break; }
+      for(const n of neighbors(node)){
+        if(visited.has(n)) continue;
+        const alt = gScore.get(node) + n.weight;
+        if(alt < gScore.get(n)){
+          gScore.set(n, alt);
+          prev.set(n, node);
+          open.push(n);
+        }
+      }
+    }
+    return finish(found, endCell, prev, visitedOrder, false, gScore);
+  }
+
+  function finish(found, endCell, prev, visitedOrder, unweighted, distMap){
+    if(!found) return { visitedOrder, path: null, cost: 0 };
+    const path = [];
+    let cur = endCell;
+    while(cur !== undefined){
+      path.push(cur);
+      cur = prev.get(cur);
+    }
+    path.reverse();
+    let cost;
+    if(unweighted){
+      cost = path.length - 1;
+    } else {
+      cost = distMap.get(endCell);
+    }
+    return { visitedOrder, path, cost };
+  }
+
+  const ALGOS = { bfs, dfs, dijkstra, astar };
+  const ALGO_LABELS = { bfs:'BFS', dfs:'DFS', dijkstra:'Dijkstra', astar:'A*' };
+
+  // ---------- run + animate ----------
+  function speedDelayMs(){
+    const v = +document.getElementById('speed').value; // 1..100
+    return Math.max(2, Math.round((101 - v) * 2.4));
+  }
+
+  function setControlsDisabled(disabled){
+    isAnimating = disabled;
+    visualizeBtn.disabled = disabled;
+    document.getElementById('scrambleBtn').disabled = disabled;
+    document.getElementById('clearBoardBtn').disabled = disabled;
+    document.getElementById('clearPathBtn').disabled = disabled;
+  }
+
+  visualizeBtn.addEventListener('click', ()=>{
+    if(isAnimating) return;
+    cells.forEach(row=>row.forEach(cell=> clearCellVisual(cell)));
+
+    const result = ALGOS[currentAlgo]();
+    const delay = speedDelayMs();
+    setControlsDisabled(true);
+    statStatus.textContent = `Running ${ALGO_LABELS[currentAlgo]}…`;
+    statStatus.className = 'v status-running';
+    statVisited.textContent = '0';
+    statPath.textContent = '—';
+    statCost.textContent = '—';
+
+    let i = 0;
+    const visitedOrder = result.visitedOrder.filter(c => !isEndpoint(c.r,c.c));
+    function stepVisit(){
+      if(i < visitedOrder.length){
+        const node = visitedOrder[i];
+        if(!node.isWall) node.el.classList.add('visited');
+        statVisited.textContent = String(i+1);
+        i++;
+        setTimeout(stepVisit, delay);
+      } else {
+        animatePath(result);
+      }
+    }
+    stepVisit();
+  });
+
+  function animatePath(result){
+    if(!result.path){
+      statStatus.textContent = 'No path found';
+      statStatus.className = 'v status-none';
+      statPath.textContent = '0';
+      statCost.textContent = '—';
+      setControlsDisabled(false);
+      return;
+    }
+    const path = result.path.filter(c=>!isEndpoint(c.r,c.c));
+    let j = 0;
+    const pathDelay = Math.max(8, speedDelayMs()*0.6);
+    function stepPath(){
+      if(j < path.length){
+        path[j].el.classList.add('path');
+        j++;
+        setTimeout(stepPath, pathDelay);
+      } else {
+        statStatus.textContent = 'Path found';
+        statStatus.className = 'v status-found';
+        statPath.textContent = String(result.path.length - 1) + ' steps';
+        statCost.textContent = String(result.cost);
+        setControlsDisabled(false);
+      }
+    }
+    stepPath();
+  }
+
+  buildGrid();
+})();
+</script>
+</body>
+</html>
